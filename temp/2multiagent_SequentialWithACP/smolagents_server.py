@@ -1,30 +1,18 @@
-%%writefile ../my_acp_project/smolagents_server.py
-from collections.abc import AsyncGenerator
-from acp_sdk.models import Message, MessagePart
-from acp_sdk.server import Context, RunYield, RunYieldResume, Server
-from smolagents import CodeAgent, DuckDuckGoSearchTool, LiteLLMModel, VisitWebpageTool
-import logging 
-from dotenv import load_dotenv
+from acp_sdk.client import Client
+import asyncio
+from colorama import Fore 
 
-load_dotenv() 
+async def run_hospital_workflow() -> None:
+    async with Client(base_url="http://localhost:8001") as insurer, Client(base_url="http://localhost:8000") as hospital:
+        run1 = await hospital.run_sync(
+            agent="health_agent", input="Do I need rehabilitation after a shoulder reconstruction?"
+        )
+        content = run1.output[0].parts[0].content
+        print(Fore.LIGHTMAGENTA_EX+ content + Fore.RESET)
 
-server = Server()
-
-model = LiteLLMModel(
-    model_id="openai/gpt-4",  
-    max_tokens=2048
-)
-
-@server.agent()
-async def health_agent(input: list[Message], context: Context) -> AsyncGenerator[RunYield, RunYieldResume]:
-    "This is a CodeAgent which supports the hospital to handle health based questions for patients. Current or prospective patients can use it to find answers about their health and hospital treatments."
-    agent = CodeAgent(tools=[DuckDuckGoSearchTool(), VisitWebpageTool()], model=model)
-
-    prompt = input[0].parts[0].content
-    response = agent.run(prompt)
-
-    yield Message(parts=[MessagePart(content=str(response))])
-
-
-if __name__ == "__main__":
-    server.run(port=8000)
+        run2 = await insurer.run_sync(
+            agent="policy_agent", input=f"Context: {content} What is the waiting period for rehabilitation?"
+        )
+        print(Fore.YELLOW + run2.output[0].parts[0].content + Fore.RESET)
+        
+        asyncio.run(run_hospital_workflow())
