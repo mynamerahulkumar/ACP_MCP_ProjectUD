@@ -1,12 +1,13 @@
+%%writefile ../my_acp_project/smolagents_server.py
 from collections.abc import AsyncGenerator
 from acp_sdk.models import Message, MessagePart
-from acp_sdk.server import RunYield, RunYieldResume, Server
-from smolagents import CodeAgent, DuckDuckGoSearchTool, LiteLLMModel, VisitWebpageTool, ToolCallingAgent, ToolCollection
-from mcp import StdioServerParameters
+from acp_sdk.server import Context, RunYield, RunYieldResume, Server
+from smolagents import CodeAgent, DuckDuckGoSearchTool, LiteLLMModel, VisitWebpageTool
+import logging 
 from dotenv import load_dotenv
-load_dotenv()
-import os
-os.environ['OPENAI_API_KEY']=os.getenv('OPENAI_API_KEY')
+
+load_dotenv() 
+
 server = Server()
 
 model = LiteLLMModel(
@@ -14,14 +15,8 @@ model = LiteLLMModel(
     max_tokens=2048
 )
 
-server_parameters = StdioServerParameters(
-    command="uv",
-    args=["run", "mcpserver.py"],
-    env=None,
-)
-
 @server.agent()
-async def health_agent(input: list[Message]) -> AsyncGenerator[RunYield, RunYieldResume]:
+async def health_agent(input: list[Message], context: Context) -> AsyncGenerator[RunYield, RunYieldResume]:
     "This is a CodeAgent which supports the hospital to handle health based questions for patients. Current or prospective patients can use it to find answers about their health and hospital treatments."
     agent = CodeAgent(tools=[DuckDuckGoSearchTool(), VisitWebpageTool()], model=model)
 
@@ -30,16 +25,6 @@ async def health_agent(input: list[Message]) -> AsyncGenerator[RunYield, RunYiel
 
     yield Message(parts=[MessagePart(content=str(response))])
 
-@server.agent()
-async def doctor_agent(input: list[Message]) -> AsyncGenerator[RunYield, RunYieldResume]:
-    "This is a Doctor Agent which helps users find doctors near them."
-    with ToolCollection.from_mcp(server_parameters, trust_remote_code=True) as tool_collection:
-        agent = ToolCallingAgent(tools=[*tool_collection.tools], model=model)
-        prompt = input[0].parts[0].content
-        response = agent.run(prompt)
-
-    yield Message(parts=[MessagePart(content=str(response))])
 
 if __name__ == "__main__":
-    print("Smolagent doctor running.... ")
     server.run(port=8000)
