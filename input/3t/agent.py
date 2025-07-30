@@ -1,18 +1,26 @@
+import asyncio 
+import nest_asyncio
 from acp_sdk.client import Client
-import asyncio
-from colorama import Fore 
+from smolagents import LiteLLMModel
+from fastacp import AgentCollection, ACPCallingAgent
+from colorama import Fore
+print(ACPCallingAgent.__doc__)
+nest_asyncio.apply()
+
+model = LiteLLMModel(
+    model_id="openai/gpt-4"
+)
 
 async def run_hospital_workflow() -> None:
     async with Client(base_url="http://localhost:8001") as insurer, Client(base_url="http://localhost:8000") as hospital:
-        run1 = await hospital.run_sync(
-            agent="health_agent", input="Do I need rehabilitation after a shoulder reconstruction?"
-        )
-        content = run1.output[0].parts[0].content
-        print(Fore.LIGHTMAGENTA_EX+ content + Fore.RESET)
-
-        run2 = await insurer.run_sync(
-            agent="policy_agent", input=f"Context: {content} What is the waiting period for rehabilitation?"
-        )
-        print(Fore.YELLOW + run2.output[0].parts[0].content + Fore.RESET)
+        # agents discovery
+        agent_collection = await AgentCollection.from_acp(insurer, hospital)  
+        acp_agents = {agent.name: {'agent':agent, 'client':client} for client, agent in agent_collection.agents}
+        print(acp_agents) 
+        # passing the agents as tools to ACPCallingAgent
+        acpagent = ACPCallingAgent(acp_agents=acp_agents, model=model)
+        # running the agent with a user query
+        result = await acpagent.run("do i need rehabilitation after a shoulder reconstruction and what is the waiting period from my insurance?")
+        print(Fore.YELLOW + f"Final result: {result}" + Fore.RESET)
 
 asyncio.run(run_hospital_workflow())
