@@ -7,13 +7,13 @@ from crewai_tools import RagTool
 import nest_asyncio
 
 nest_asyncio.apply()
-
-server = Server()
-llm = LLM(model="openai/gpt-4", max_tokens=1024)
 from dotenv import load_dotenv
 load_dotenv()
 import os
-os.environ['OPENAI_API_KEY']=os.getenv('OPENAI_API_KEY')
+os.environ['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
+server = Server()
+llm = LLM(model="openai/gpt-4", max_tokens=1024)
+
 config = {
     "llm": {
         "provider": "openai",

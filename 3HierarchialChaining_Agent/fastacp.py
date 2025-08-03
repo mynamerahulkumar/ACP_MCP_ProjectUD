@@ -342,16 +342,56 @@ class ACPCallingAgent(MultiStepAgent):
         # Convert messages to LiteLLM format
         memory_messages = self.write_memory_to_messages()
         # Make sure all messages are in the correct LiteLLM format
-        for i, message in enumerate(memory_messages):
-            if "content" in message and not isinstance(message["content"], list):
-                memory_messages[i]["content"] = [{"type": "text", "text": message["content"]}]
+        formatted_messages = []
+        for message in memory_messages:
+            if isinstance(message, dict):
+                # Message is already a dictionary
+                if "content" in message and not isinstance(message["content"], list):
+                    formatted_message = message.copy()
+                    formatted_message["content"] = [{"type": "text", "text": message["content"]}]
+                    formatted_messages.append(formatted_message)
+                else:
+                    formatted_messages.append(message)
+            else:
+                # Message is an object, convert to dict
+                formatted_message = {
+                    "role": getattr(message, 'role', 'user'),
+                    "content": [{"type": "text", "text": getattr(message, 'content', str(message))}]
+                }
+                formatted_messages.append(formatted_message)
         
-        self.input_messages = memory_messages
-        memory_step.model_input_messages = memory_messages.copy()
+        self.input_messages = formatted_messages
+        memory_step.model_input_messages = formatted_messages.copy()
 
         try:  
+            # Convert messages to the format expected by LiteLLMModel
+            litellm_messages = []
+            for msg in formatted_messages:
+                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                    # Convert from our format to LiteLLM format
+                    content_text = ""
+                    if isinstance(msg["content"], list):
+                        for content_item in msg["content"]:
+                            if isinstance(content_item, dict) and "text" in content_item:
+                                content_text += content_item["text"]
+                            else:
+                                content_text += str(content_item)
+                    else:
+                        content_text = str(msg["content"])
+                    
+                    litellm_messages.append({
+                        "role": msg["role"],
+                        "content": content_text
+                    })
+                else:
+                    # Fallback for unexpected format
+                    litellm_messages.append({
+                        "role": "user",
+                        "content": str(msg)
+                    })
+            
             model_message: ChatMessage = self.model(
-                memory_messages,
+                litellm_messages,
                 tools_to_call_from=list(self.tools.values())[:-1],
                 stop_sequences=["Observation:", "Calling agents:"],
             )           

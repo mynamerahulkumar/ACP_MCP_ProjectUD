@@ -4,7 +4,7 @@ import json
 import requests
 
 mcp = FastMCP("doctorserver")
-
+    
 # Build server function
 @mcp.tool()
 def list_doctors(state:str) -> str:
@@ -17,7 +17,7 @@ def list_doctors(state:str) -> str:
         str: a list of doctors that may be near you
         Example Response "{"DOC001":{"name":"Dr John James", "specialty":"Cardiology"...}...}" 
         """
-
+    
     url = 'https://raw.githubusercontent.com/nicknochnack/ACPWalkthrough/refs/heads/main/doctors.json'
     resp = requests.get(url)
     doctors = json.loads(resp.text)
@@ -27,5 +27,5 @@ def list_doctors(state:str) -> str:
 
 # Kick off server if file is run 
 if __name__ == "__main__":
-    print("MCP server doctor list running...")
+    print("MCP  server running...")
     mcp.run(transport="stdio")

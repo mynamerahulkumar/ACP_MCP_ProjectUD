@@ -41,5 +41,5 @@ async def doctor_agent(input: list[Message]) -> AsyncGenerator[RunYield, RunYiel
     yield Message(parts=[MessagePart(content=str(response))])
 
 if __name__ == "__main__":
-    print("Smolagent doctor running.... ")
+    print("Smol agent running...")
     server.run(port=8000)
