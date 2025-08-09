@@ -1,6 +1,4 @@
 from typing import List, Dict, Callable, Optional, Union, Any, AsyncGenerator
-import importlib.resources
-import yaml
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -339,34 +337,58 @@ class ACPCallingAgent(MultiStepAgent):
         Perform one step in the reasoning process: the agent thinks, calls ACP agents, and observes results.
         Returns None if the step is not final.
         """
-        # Convert messages to LiteLLM format
-        memory_messages = self.write_memory_to_messages()
-        # Make sure all messages are in the correct LiteLLM format
-        formatted_messages = []
-        for message in memory_messages:
-            if isinstance(message, dict):
-                # Message is already a dictionary
-                if "content" in message and not isinstance(message["content"], list):
-                    formatted_message = message.copy()
-                    formatted_message["content"] = [{"type": "text", "text": message["content"]}]
-                    formatted_messages.append(formatted_message)
+        try:
+            # Convert messages to LiteLLM format
+            memory_messages = self.write_memory_to_messages()
+            print(f"DEBUG: memory_messages type: {type(memory_messages)}")
+            print(f"DEBUG: memory_messages content: {memory_messages}")
+            
+            # Make sure all messages are in the correct LiteLLM format
+            formatted_messages = []
+            for i, message in enumerate(memory_messages):
+                print(f"DEBUG: Processing message {i}: type={type(message)}, content={message}")
+                
+                if isinstance(message, dict):
+                    # Message is already a dictionary
+                    if "content" in message:
+                        if not isinstance(message["content"], list):
+                            # Convert string content to list format
+                            formatted_message = message.copy()
+                            formatted_message["content"] = [{"type": "text", "text": str(message["content"])}]
+                            formatted_messages.append(formatted_message)
+                        else:
+                            # Content is already in list format
+                            formatted_messages.append(message)
+                    else:
+                        # Dictionary without content key - treat as raw text
+                        formatted_message = {
+                            "role": message.get('role', 'user'),
+                            "content": [{"type": "text", "text": str(message)}]
+                        }
+                        formatted_messages.append(formatted_message)
                 else:
-                    formatted_messages.append(message)
-            else:
-                # Message is an object, convert to dict
-                formatted_message = {
-                    "role": getattr(message, 'role', 'user'),
-                    "content": [{"type": "text", "text": getattr(message, 'content', str(message))}]
-                }
-                formatted_messages.append(formatted_message)
-        
-        self.input_messages = formatted_messages
-        memory_step.model_input_messages = formatted_messages.copy()
+                    # Message is an object, convert to dict
+                    print(f"DEBUG: Converting object message, has role attr: {hasattr(message, 'role')}")
+                    formatted_message = {
+                        "role": getattr(message, 'role', 'user'),
+                        "content": [{"type": "text", "text": getattr(message, 'content', str(message))}]
+                    }
+                    formatted_messages.append(formatted_message)
+            
+            print(f"DEBUG: formatted_messages: {formatted_messages}")
+            self.input_messages = formatted_messages
+            memory_step.model_input_messages = formatted_messages.copy()
+        except Exception as e:
+            print(f"DEBUG: Error in message formatting: {e}")
+            import traceback
+            traceback.print_exc()
+            raise AgentParsingError(f"Error in message formatting: {e}", self.logger) from e
 
         try:  
             # Convert messages to the format expected by LiteLLMModel
             litellm_messages = []
             for msg in formatted_messages:
+                print(f"DEBUG: Processing LiteLLM message: {msg}")
                 if isinstance(msg, dict) and "role" in msg and "content" in msg:
                     # Convert from our format to LiteLLM format
                     content_text = ""
@@ -390,11 +412,59 @@ class ACPCallingAgent(MultiStepAgent):
                         "content": str(msg)
                     })
             
-            model_message: ChatMessage = self.model(
-                litellm_messages,
-                tools_to_call_from=list(self.tools.values())[:-1],
-                stop_sequences=["Observation:", "Calling agents:"],
-            )           
+            print(f"DEBUG: Final LiteLLM messages: {litellm_messages}")
+            
+            # LiteLLMModel expects tools in a specific format - convert our tools
+            tools_for_model = []
+            for tool in list(self.tools.values())[:-1]:  # Exclude final_answer
+                tool_spec = {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": {
+                            "type": "object",
+                            "properties": tool.inputs,
+                            "required": list(tool.inputs.keys()) if tool.inputs else []
+                        }
+                    }
+                }
+                tools_for_model.append(tool_spec)
+            
+            print(f"DEBUG: Tools for model: {tools_for_model}")
+            
+            # Call the LiteLLM model with proper format
+            print("DEBUG: About to call self.model...")
+            response = self.model(
+                messages=litellm_messages,
+                tools=tools_for_model if tools_for_model else None,
+                stop=["Observation:", "Calling agents:"],
+            )
+            print(f"DEBUG: Model response type: {type(response)}")
+            print(f"DEBUG: Model response: {response}")
+            
+            # Convert response to our ChatMessage format
+            if hasattr(response, 'choices') and response.choices:
+                choice = response.choices[0]
+                message = choice.message
+                print(f"DEBUG: Choice message type: {type(message)}")
+                print(f"DEBUG: Choice message: {message}")
+                
+                # Create ChatMessage from response
+                model_message = ChatMessage(
+                    content=getattr(message, 'content', ''),
+                    tool_calls=getattr(message, 'tool_calls', None),
+                    raw=response
+                )
+            else:
+                # Fallback if response format is unexpected
+                model_message = ChatMessage(
+                    content=str(response),
+                    tool_calls=None,
+                    raw=response
+                )
+           
+            print(f"DEBUG: Created model_message: {model_message}")
             memory_step.model_output_message = model_message
         except Exception as e:
             raise AgentParsingError(f"Error while generating or parsing output:\n{e}", self.logger) from e

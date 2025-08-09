@@ -24,18 +24,19 @@ async def run_hospital_workflow() -> None:
         )
         print(f"{Fore.YELLOW}Insurance Agent Response: {run2.output[0].parts[0].content}{Fore.RESET}\n")
 
-async def run_doctor_finder_workflow() -> None:
+async def run_doctoer_finder_workflow()->None:
     """
     Test the LangGraph doctor finder agent
     """
     async with Client(base_url="http://localhost:8002") as langgraph_hospital:
         print(f"{Fore.CYAN}Testing LangGraph Doctor Finder Agent...{Fore.RESET}")
-        
-        run1 = await langgraph_hospital.run_sync(
-            agent="doctor_finder_agent", input="I'm based in Atlanta, GA. Are there any cardiologists near me?"
+        run1=await langgraph_hospital.run_sync(
+            agent="doctor_finder_agent",input="I'm based in New York City. Are there any cardiologists near me?"
         )
-        content = run1.output[0].parts[0].content
+        content=run1.output[0].parts[0].content
         print(f"{Fore.LIGHTBLUE_EX}Doctor Finder Response: {content}{Fore.RESET}\n")
+
+
 
 async def main():
     """
@@ -50,7 +51,7 @@ async def main():
         print(f"{Fore.GREEN}--- Separator ---{Fore.RESET}\n")
         
         # Run the doctor finder workflow
-        # await run_doctor_finder_workflow()
+        await run_doctoer_finder_workflow()
         
         print(f"{Fore.GREEN}=== All workflows completed successfully! ==={Fore.RESET}")
         

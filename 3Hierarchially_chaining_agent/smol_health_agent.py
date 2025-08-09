@@ -58,4 +58,6 @@ async def health_agent(input: list[Message], context: Context) -> AsyncGenerator
 
 
 if __name__ == "__main__":
+    print(f"SMOL AI Hospital agent server running....")
+
     server.run(port=8000)

@@ -61,4 +61,5 @@ async def policy_agent(input: list[Message]) -> AsyncGenerator[RunYield, RunYiel
     yield Message(parts=[MessagePart(content=str(task_output))])
 
 if __name__ == "__main__":
+    print(f"Crew AI Insurance agent server running....")
     server.run(port=8001)

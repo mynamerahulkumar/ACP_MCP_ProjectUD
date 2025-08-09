@@ -158,6 +158,7 @@ async def doctor_finder_agent(input: list[Message], context: Context) -> AsyncGe
         specialty = state["specialty"]
         
         search_query = f"find {specialty} doctors near {location} contact information"
+        print(f"Search query- langgraph-doctor finder:{search_query}\n")
         search_result = search_tool.run(search_query)
         
         # Create a comprehensive response
